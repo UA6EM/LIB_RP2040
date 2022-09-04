@@ -1,0 +1,122 @@
+// СЕКУНДОМЕР
+#include <Adafruit_GFX.h>    // Core graphics library
+#include <Adafruit_ST7735.h> // Hardware-specific library for ST7735
+#include <Adafruit_ST7789.h> // Hardware-specific library for ST7789
+#include <SPI.h>
+
+#define SPI01 // Дисплей на SPI1, NRF24L01 на SPI0
+
+#if defined(SPI01)        // для RP2040 SPI1
+#define TFT_CS        13  // GP13 - CS
+#define TFT_RST       14  // GP14 - RESET
+#define TFT_DC        15  // GP15 - A0
+#define TFT_MISO      12  // GP12 - MISO (MISO, RX)
+#define TFT_MOSI      11  // GP11 - SDA  (MOSI, TX)
+#define TFT_SCLK      10  // GP10 - SCK
+
+#else                       // для RP2040 SPI0
+#define TFT_CS        5   // GP5 - CS
+#define TFT_RST       6   // GP6 - RESET
+#define TFT_DC        7   // GP7 - A0
+#define TFT_MISO      4   // GP4 - MISO (MISO, RX)
+#define TFT_MOSI      3   // GP3 - SDA  (MOSI, TX)
+#define TFT_SCLK      2   // GP2 - SCK
+#endif
+
+// For ST7735-based displays, we will use this call
+Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
+
+float a = 0.00; // переменная для угла поворота стрелки
+float aa = 0.00; // переменная для угла поворота стрелки (предыдущее значение)
+int str = 55; //длина стрелки в пикселях
+byte sek = 16; //
+
+void setup(void) {
+  // Используйте этот инициализатор, если вы используете 1,8-дюймовый TFT
+  tft.initR(INITR_BLACKTAB);   // initialize a ST7735S chip, black tab
+  tft.fillScreen(ST7735_BLACK);
+  tft.setRotation(1);//ориентация экрана
+  tft.setSPISpeed(50000000);
+  tft.drawCircle(80, 64, 63, ST7735_WHITE ); //обод секундомера
+  tft.drawCircle(80, 64, 62, ST7735_WHITE );
+  tft.drawCircle(80, 64, 61, ST7735_WHITE );
+
+}
+void loop() {
+  //
+  aa = a;
+  // tft.drawLine(80, 64, 80 + cos(aa)*str, 64 + sin(aa)*str,ST7735_BLACK ); // стирание старой стрелки-отрезка
+  tft.drawLine(80 + cos(aa + 1.5)*str * 0.1, 64 + sin(aa + 1.5)*str * 0.1, 80 + cos(aa)*str, 64 + sin(aa)*str, ST7735_BLACK ); // стирание старой стрелки
+  tft.drawLine(80 + cos(aa - 1.5)*str * 0.1, 64 + sin(aa - 1.5)*str * 0.1, 80 + cos(aa)*str, 64 + sin(aa)*str, ST7735_BLACK ); // стирание старой стрелки
+  a = a + PI / 30;
+  for (float i = 0.01; i < 2 * PI; i = i + PI / 30) {
+    tft.drawLine(80 + cos(i)*str * 0.9,  64 + sin(i)*str * 0.9, 80 + cos(i)*str,  64 + sin(i)*str, ST7735_GREEN    ); // риски-метки шкалы через 1 сек
+  }
+  for (float i = 0.01; i < 2 * PI; i = i + PI / 6) {
+    tft.drawLine(80 + cos(i)*str * 0.75,  64 + sin(i)*str * 0.75, 80 + cos(i)*str,  64 + sin(i)*str, ST7735_WHITE   ); // риски-метки шкалы через 5 сек
+  }
+  // tft.drawLine(80, 64, 80 + cos(a)*str, 64 + sin(a)*str,ST7735_WHITE ); // рисование новой стрелки-отрезка
+  tft.drawLine(80 + cos(a + 1.5)*str * 0.1, 64 + sin(a + 1.5)*str * 0.1, 80 + cos(a)*str, 64 + sin(a)*str, ST7735_WHITE ); // рисование новой стрелки
+  tft.drawLine(80 + cos(a - 1.5)*str * 0.1, 64 + sin(a - 1.5)*str * 0.1, 80 + cos(a)*str, 64 + sin(a)*str, ST7735_WHITE ); // рисование новой стрелки
+  //
+  tft.drawCircle(80, 64, 5, ST7735_WHITE );
+  tft.drawCircle(80, 64, 4, ST7735_WHITE );
+  tft.setCursor(50, 45);
+  tft.setTextSize(1);
+  tft.setTextColor(ST7735_GREEN);
+  tft.println(utf8rus("SECUNDOMER"));
+  tft.setCursor(70, 80);
+  tft.setTextSize(2);
+  tft.setTextColor(ST7735_GREEN);
+  if (sek < 10) {
+    tft.print("0");
+  } tft.println(sek);
+  sek++; if (sek > 59) {
+    sek = 0;
+  }
+  //
+  delay(835);//подбираем опытным путём
+  tft.fillRect(70, 80, 30, 20, ST7735_BLACK);
+}
+////////////////////////////////////////////////////////////////////////
+/* Функция перекодировки русских букв из UTF-8 в Win-1251 */
+String utf8rus(String source)
+{
+  int i, k;
+  String target;
+  unsigned char n;
+  char m[2] = { '0', '\0' };
+
+  k = source.length(); i = 0;
+
+  while (i < k) {
+    n = source[i]; i++;
+
+    if (n >= 0xC0) {
+      switch (n) {
+        case 0xD0: {
+            n = source[i]; i++;
+            if (n == 0x81) {
+              n = 0xA8;
+              break;
+            }
+            if (n >= 0x90 && n <= 0xBF) n = n + 0x30;
+            break;
+          }
+        case 0xD1: {
+            n = source[i]; i++;
+            if (n == 0x91) {
+              n = 0xB8;
+              break;
+            }
+            if (n >= 0x80 && n <= 0x8F) n = n + 0x70;
+            break;
+          }
+      }
+    }
+    m[0] = n; target = target + String(m);
+  }
+  return target;
+}
+///////////////////////////////////////////////////////////////////////////
+
